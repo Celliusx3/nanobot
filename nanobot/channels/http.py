@@ -50,7 +50,9 @@ class HTTPChannel(BaseChannel):
             await self._runner.cleanup()
 
     async def send(self, msg: OutboundMessage) -> None:
-        """Resolve the pending future for this chat_id."""
+        """Resolve the pending future for this chat_id (final messages only)."""
+        if msg.metadata.get("_progress"):
+            return
         future = self._pending.pop(msg.chat_id, None)
         if future and not future.done():
             future.set_result(msg.content)
