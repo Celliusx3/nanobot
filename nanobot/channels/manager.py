@@ -150,6 +150,14 @@ class ChannelManager:
             except ImportError as e:
                 logger.warning("Matrix channel not available: {}", e)
 
+        # HTTP channel
+        if self.config.channels.http.enabled:
+            from nanobot.channels.http import HTTPChannel
+            self.channels["http"] = HTTPChannel(
+                self.config.channels.http, self.bus
+            )
+            logger.info("HTTP channel enabled")
+
         self._validate_allow_from()
 
     def _validate_allow_from(self) -> None:
