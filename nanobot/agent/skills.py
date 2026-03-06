@@ -1,5 +1,6 @@
 """Skills loader for agent capabilities."""
 
+import importlib.metadata
 import json
 import os
 import re
@@ -149,6 +150,10 @@ class SkillsLoader:
         for env in requires.get("env", []):
             if not os.environ.get(env):
                 missing.append(f"ENV: {env}")
+        for pkg in requires.get("pip", []):
+            pkg_name = re.split(r"[><=!]", pkg)[0].strip()
+            if not self._is_pip_installed(pkg_name):
+                missing.append(f"PIP: {pkg}")
         return ", ".join(missing)
 
     def _get_skill_description(self, name: str) -> str:
@@ -175,7 +180,7 @@ class SkillsLoader:
             return {}
 
     def _check_requirements(self, skill_meta: dict) -> bool:
-        """Check if skill requirements are met (bins, env vars)."""
+        """Check if skill requirements are met (bins, env vars, pip packages)."""
         requires = skill_meta.get("requires", {})
         for b in requires.get("bins", []):
             if not shutil.which(b):
@@ -183,7 +188,20 @@ class SkillsLoader:
         for env in requires.get("env", []):
             if not os.environ.get(env):
                 return False
+        for pkg in requires.get("pip", []):
+            pkg_name = re.split(r"[><=!]", pkg)[0].strip()
+            if not self._is_pip_installed(pkg_name):
+                return False
         return True
+
+    @staticmethod
+    def _is_pip_installed(package: str) -> bool:
+        """Check if a pip package is installed."""
+        try:
+            importlib.metadata.distribution(package)
+            return True
+        except importlib.metadata.PackageNotFoundError:
+            return False
 
     def _get_skill_meta(self, name: str) -> dict:
         """Get nanobot metadata for a skill (cached in frontmatter)."""

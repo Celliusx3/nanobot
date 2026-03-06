@@ -93,6 +93,12 @@ def cmd_install(repo: str, slug: str) -> None:
         import shutil
         shutil.rmtree(dest)
     download_dir(repo, slug, dest)
+    # Install pip dependencies if requirements.txt exists
+    req_file = dest / "requirements.txt"
+    if req_file.exists():
+        import subprocess
+        print(f"Installing pip dependencies from {req_file}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(req_file)])
     print(f"Installed '{slug}' to {dest}")
 
 
