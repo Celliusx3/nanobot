@@ -858,38 +858,54 @@ app.add_typer(env_app, name="env")
 
 @env_app.command("set")
 def env_set(
+    skill_name: str = typer.Argument(..., help="Skill name"),
     key: str = typer.Argument(..., help="Environment variable name"),
     value: str = typer.Argument(..., help="Value to store"),
 ):
-    """Set an environment variable."""
+    """Set an environment variable for a skill."""
     from nanobot.config.env import EnvStore
 
-    EnvStore().set(key, value)
-    console.print(f"[green]✓[/green] Saved {key}")
+    EnvStore().set(skill_name, key, value)
+    console.print(f"[green]✓[/green] Saved {skill_name}/{key} [dim](encrypted)[/dim]")
 
 
 @env_app.command("list")
-def env_list():
-    """List configured environment variable keys."""
+def env_list(
+    skill_name: str = typer.Argument(None, help="Skill name (omit to list all skills)"),
+):
+    """List configured environment variables."""
     from nanobot.config.env import EnvStore
 
-    keys = EnvStore().list_keys()
-    if not keys:
-        console.print("[dim]No environment variables configured[/dim]")
-        return
-    for k in keys:
-        console.print(f"  {k}")
+    store = EnvStore()
+    if skill_name:
+        keys = store.list_keys(skill_name)
+        if not keys:
+            console.print(f"[dim]No variables for {skill_name}[/dim]")
+            return
+        for k in keys:
+            console.print(f"  {k}")
+    else:
+        skills = store.list_keys()
+        if not skills:
+            console.print("[dim]No environment variables configured[/dim]")
+            return
+        for s in skills:
+            keys = store.list_keys(s)
+            console.print(f"  {s}: {', '.join(keys)}")
 
 
 @env_app.command("remove")
-def env_remove(key: str = typer.Argument(..., help="Environment variable name to remove")):
+def env_remove(
+    skill_name: str = typer.Argument(..., help="Skill name"),
+    key: str = typer.Argument(..., help="Environment variable name to remove"),
+):
     """Remove an environment variable."""
     from nanobot.config.env import EnvStore
 
-    if EnvStore().remove(key):
-        console.print(f"[green]✓[/green] Removed {key}")
+    if EnvStore().remove(skill_name, key):
+        console.print(f"[green]✓[/green] Removed {skill_name}/{key}")
     else:
-        console.print(f"[yellow]Not found: {key}[/yellow]")
+        console.print(f"[yellow]Not found: {skill_name}/{key}[/yellow]")
 
 
 # ============================================================================

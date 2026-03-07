@@ -1,7 +1,6 @@
 """Skills loader for agent capabilities."""
 
 import json
-import os
 import re
 import shutil
 from pathlib import Path
@@ -56,7 +55,7 @@ class SkillsLoader:
 
         # Filter by requirements
         if filter_unavailable:
-            return [s for s in skills if self._check_requirements(self._get_skill_meta(s["name"]))]
+            return [s for s in skills if self._check_requirements(s["name"], self._get_skill_meta(s["name"]))]
         return skills
 
     def load_skill(self, name: str) -> str | None:
@@ -124,7 +123,7 @@ class SkillsLoader:
             path = s["path"]
             desc = escape_xml(self._get_skill_description(s["name"]))
             skill_meta = self._get_skill_meta(s["name"])
-            available = self._check_requirements(skill_meta)
+            available = self._check_requirements(s["name"], skill_meta)
 
             lines.append(f"  <skill available=\"{str(available).lower()}\">")
             lines.append(f"    <name>{name}</name>")
@@ -133,7 +132,7 @@ class SkillsLoader:
 
             # Show missing requirements for unavailable skills
             if not available:
-                missing = self._get_missing_requirements(skill_meta)
+                missing = self._get_missing_requirements(s["name"], skill_meta)
                 if missing:
                     lines.append(f"    <requires>{escape_xml(missing)}</requires>")
 
@@ -142,7 +141,7 @@ class SkillsLoader:
 
         return "\n".join(lines)
 
-    def _get_missing_requirements(self, skill_meta: dict) -> str:
+    def _get_missing_requirements(self, skill_name: str, skill_meta: dict) -> str:
         """Get a description of missing requirements."""
         missing = []
         requires = skill_meta.get("requires", {})
@@ -150,7 +149,7 @@ class SkillsLoader:
             if not shutil.which(b):
                 missing.append(f"CLI: {b}")
         for env_key in requires.get("env", []):
-            if not self._has_env(env_key):
+            if not self._has_env(skill_name, env_key):
                 missing.append(f"ENV: {env_key}")
         return ", ".join(missing)
 
@@ -177,22 +176,20 @@ class SkillsLoader:
         except (json.JSONDecodeError, TypeError):
             return {}
 
-    def _check_requirements(self, skill_meta: dict) -> bool:
+    def _check_requirements(self, skill_name: str, skill_meta: dict) -> bool:
         """Check if skill requirements are met (bins, env vars)."""
         requires = skill_meta.get("requires", {})
         for b in requires.get("bins", []):
             if not shutil.which(b):
                 return False
         for env_key in requires.get("env", []):
-            if not self._has_env(env_key):
+            if not self._has_env(skill_name, env_key):
                 return False
         return True
 
-    def _has_env(self, key: str) -> bool:
-        """Check if a key exists in os.environ or .env file."""
-        if os.environ.get(key):
-            return True
-        return self.env_store.get(key) is not None
+    def _has_env(self, skill_name: str, key: str) -> bool:
+        """Check if a key exists in the encrypted env store for a skill."""
+        return self.env_store.get(skill_name, key) is not None
 
     def _get_skill_meta(self, name: str) -> dict:
         """Get nanobot metadata for a skill (cached in frontmatter)."""

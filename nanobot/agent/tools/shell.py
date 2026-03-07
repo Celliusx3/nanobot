@@ -79,7 +79,7 @@ class ExecTool(Tool):
         if guard_error:
             return guard_error
 
-        env = self._build_env(cwd, skill_name)
+        env, secrets = self._build_env(cwd, skill_name)
 
         try:
             process = await asyncio.create_subprocess_shell(
@@ -120,6 +120,10 @@ class ExecTool(Tool):
 
             result = "\n".join(output_parts) if output_parts else "(no output)"
 
+            # Redact secret values from output before LLM sees it
+            for secret in secrets:
+                result = result.replace(secret, "***")
+
             # Truncate very long output
             max_len = 10000
             if len(result) > max_len:
@@ -130,22 +134,23 @@ class ExecTool(Tool):
         except Exception as e:
             return f"Error executing command: {str(e)}"
 
-    def _build_env(self, cwd: str, skill_name: str) -> dict[str, str]:
-        """Build subprocess environment."""
+    def _build_env(self, cwd: str, skill_name: str) -> tuple[dict[str, str], list[str]]:
+        """Build subprocess environment. Returns (env_dict, secret_values)."""
         env = os.environ.copy()
         if self.path_append:
             env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
 
-        # Merge .env file (os.environ takes precedence)
-        for key, value in self.env_store.load_all().items():
-            env.setdefault(key, value)
+        # Merge encrypted secrets for this skill (secrets override os.environ)
+        skill_secrets = self.env_store.load_all(skill_name)
+        for key, value in skill_secrets.items():
+            env[key] = value
 
         # vendor/ → PYTHONPATH
         vendor = self.skills_loader.get_vendor_path(skill_name)
         if vendor:
             env["PYTHONPATH"] = str(vendor) + os.pathsep + env.get("PYTHONPATH", "")
 
-        return env
+        return env, list(skill_secrets.values())
 
     def _guard_command(self, command: str, cwd: str) -> str | None:
         """Best-effort safety guard for potentially destructive commands."""
