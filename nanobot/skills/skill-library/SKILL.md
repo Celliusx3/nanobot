@@ -1,7 +1,7 @@
 ---
 name: skill-library
 description: Browse, install, and publish skills from a personal GitHub skill library.
-metadata: {"nanobot":{"emoji":"📚"}}
+metadata: {"nanobot":{"emoji":"📚","requires":{"env":["GH_TOKEN"]}}}
 ---
 
 # Skill Library

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from nanobot.agent.tools.base import Tool
+from nanobot.config.env import EnvStore
 
 
 class ExecTool(Tool):
@@ -21,6 +22,7 @@ class ExecTool(Tool):
         restrict_to_workspace: bool = False,
         path_append: str = "",
     ):
+        self.env_store = EnvStore()
         self.timeout = timeout
         self.working_dir = working_dir
         self.deny_patterns = deny_patterns or [
@@ -62,21 +64,14 @@ class ExecTool(Tool):
             },
             "required": ["command"]
         }
-    
+
     async def execute(self, command: str, working_dir: str | None = None, **kwargs: Any) -> str:
         cwd = working_dir or self.working_dir or os.getcwd()
         guard_error = self._guard_command(command, cwd)
         if guard_error:
             return guard_error
-        
-        env = os.environ.copy()
-        if self.path_append:
-            env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
 
-        # Auto-add vendor/ to PYTHONPATH if it exists in the working directory
-        vendor = Path(cwd) / "vendor"
-        if vendor.is_dir():
-            env["PYTHONPATH"] = str(vendor) + os.pathsep + env.get("PYTHONPATH", "")
+        env = self._build_env(cwd)
 
         try:
             process = await asyncio.create_subprocess_shell(
@@ -86,7 +81,7 @@ class ExecTool(Tool):
                 cwd=cwd,
                 env=env,
             )
-            
+
             try:
                 stdout, stderr = await asyncio.wait_for(
                     process.communicate(),
@@ -101,31 +96,48 @@ class ExecTool(Tool):
                 except asyncio.TimeoutError:
                     pass
                 return f"Error: Command timed out after {self.timeout} seconds"
-            
+
             output_parts = []
-            
+
             if stdout:
                 output_parts.append(stdout.decode("utf-8", errors="replace"))
-            
+
             if stderr:
                 stderr_text = stderr.decode("utf-8", errors="replace")
                 if stderr_text.strip():
                     output_parts.append(f"STDERR:\n{stderr_text}")
-            
+
             if process.returncode != 0:
                 output_parts.append(f"\nExit code: {process.returncode}")
-            
+
             result = "\n".join(output_parts) if output_parts else "(no output)"
-            
+
             # Truncate very long output
             max_len = 10000
             if len(result) > max_len:
                 result = result[:max_len] + f"\n... (truncated, {len(result) - max_len} more chars)"
-            
+
             return result
-            
+
         except Exception as e:
             return f"Error executing command: {str(e)}"
+
+    def _build_env(self, cwd: str) -> dict[str, str]:
+        """Build subprocess environment."""
+        env = os.environ.copy()
+        if self.path_append:
+            env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
+
+        # Merge .env file (os.environ takes precedence)
+        for key, value in self.env_store.load_all().items():
+            env.setdefault(key, value)
+
+        # vendor/ → PYTHONPATH
+        vendor = Path(cwd) / "vendor"
+        if vendor.is_dir():
+            env["PYTHONPATH"] = str(vendor) + os.pathsep + env.get("PYTHONPATH", "")
+
+        return env
 
     def _guard_command(self, command: str, cwd: str) -> str | None:
         """Best-effort safety guard for potentially destructive commands."""

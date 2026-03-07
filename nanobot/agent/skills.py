@@ -6,6 +6,8 @@ import re
 import shutil
 from pathlib import Path
 
+from nanobot.config.env import EnvStore
+
 # Default builtin skills directory (relative to this file)
 BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
@@ -22,6 +24,7 @@ class SkillsLoader:
         self.workspace = workspace
         self.workspace_skills = workspace / "skills"
         self.builtin_skills = builtin_skills_dir or BUILTIN_SKILLS_DIR
+        self.env_store = EnvStore()
 
     def list_skills(self, filter_unavailable: bool = True) -> list[dict[str, str]]:
         """
@@ -126,7 +129,7 @@ class SkillsLoader:
             lines.append(f"  <skill available=\"{str(available).lower()}\">")
             lines.append(f"    <name>{name}</name>")
             lines.append(f"    <description>{desc}</description>")
-            lines.append(f"    <location>{path}</location>")
+            lines.append(f"    <location>{str(Path(path).parent)}</location>")
 
             # Show missing requirements for unavailable skills
             if not available:
@@ -146,9 +149,9 @@ class SkillsLoader:
         for b in requires.get("bins", []):
             if not shutil.which(b):
                 missing.append(f"CLI: {b}")
-        for env in requires.get("env", []):
-            if not os.environ.get(env):
-                missing.append(f"ENV: {env}")
+        for env_key in requires.get("env", []):
+            if not self._has_env(env_key):
+                missing.append(f"ENV: {env_key}")
         return ", ".join(missing)
 
     def _get_skill_description(self, name: str) -> str:
@@ -180,10 +183,16 @@ class SkillsLoader:
         for b in requires.get("bins", []):
             if not shutil.which(b):
                 return False
-        for env in requires.get("env", []):
-            if not os.environ.get(env):
+        for env_key in requires.get("env", []):
+            if not self._has_env(env_key):
                 return False
         return True
+
+    def _has_env(self, key: str) -> bool:
+        """Check if a key exists in os.environ or .env file."""
+        if os.environ.get(key):
+            return True
+        return self.env_store.get(key) is not None
 
     def _get_skill_meta(self, name: str) -> dict:
         """Get nanobot metadata for a skill (cached in frontmatter)."""

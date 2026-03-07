@@ -848,6 +848,51 @@ def channels_login():
 
 
 # ============================================================================
+# Environment Variable Commands
+# ============================================================================
+
+
+env_app = typer.Typer(help="Manage environment variables")
+app.add_typer(env_app, name="env")
+
+
+@env_app.command("set")
+def env_set(
+    key: str = typer.Argument(..., help="Environment variable name"),
+    value: str = typer.Argument(..., help="Value to store"),
+):
+    """Set an environment variable."""
+    from nanobot.config.env import EnvStore
+
+    EnvStore().set(key, value)
+    console.print(f"[green]✓[/green] Saved {key}")
+
+
+@env_app.command("list")
+def env_list():
+    """List configured environment variable keys."""
+    from nanobot.config.env import EnvStore
+
+    keys = EnvStore().list_keys()
+    if not keys:
+        console.print("[dim]No environment variables configured[/dim]")
+        return
+    for k in keys:
+        console.print(f"  {k}")
+
+
+@env_app.command("remove")
+def env_remove(key: str = typer.Argument(..., help="Environment variable name to remove")):
+    """Remove an environment variable."""
+    from nanobot.config.env import EnvStore
+
+    if EnvStore().remove(key):
+        console.print(f"[green]✓[/green] Removed {key}")
+    else:
+        console.print(f"[yellow]Not found: {key}[/yellow]")
+
+
+# ============================================================================
 # Status Commands
 # ============================================================================
 
