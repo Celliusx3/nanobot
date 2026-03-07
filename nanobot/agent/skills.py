@@ -129,7 +129,7 @@ class SkillsLoader:
             lines.append(f"  <skill available=\"{str(available).lower()}\">")
             lines.append(f"    <name>{name}</name>")
             lines.append(f"    <description>{desc}</description>")
-            lines.append(f"    <location>{str(Path(path).parent)}</location>")
+            lines.append(f"    <location>{path}</location>")
 
             # Show missing requirements for unavailable skills
             if not available:
@@ -198,6 +198,16 @@ class SkillsLoader:
         """Get nanobot metadata for a skill (cached in frontmatter)."""
         meta = self.get_skill_metadata(name) or {}
         return self._parse_nanobot_metadata(meta.get("metadata", ""))
+
+    def get_vendor_path(self, name: str) -> Path | None:
+        """Get vendor/ directory for a skill if it exists."""
+        for skill in self.list_skills():
+            if skill["name"] == name:
+                vendor = Path(skill["path"]).parent / "vendor"
+                if vendor.is_dir():
+                    return vendor
+                return None
+        return None
 
     def get_always_skills(self) -> list[str]:
         """Get skills marked as always=true that meet requirements."""

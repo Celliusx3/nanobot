@@ -1,5 +1,7 @@
 """Subagent manager for background task execution."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import uuid
@@ -35,9 +37,11 @@ class SubagentManager:
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
     ):
+        from nanobot.agent.skills import SkillsLoader
         from nanobot.config.schema import ExecToolConfig
         self.provider = provider
         self.workspace = workspace
+        self.skills_loader = SkillsLoader(workspace)
         self.bus = bus
         self.model = model or provider.get_default_model()
         self.temperature = temperature
@@ -101,6 +105,7 @@ class SubagentManager:
             tools.register(EditFileTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(ListDirTool(workspace=self.workspace, allowed_dir=allowed_dir))
             tools.register(ExecTool(
+                skills_loader=self.skills_loader,
                 working_dir=str(self.workspace),
                 timeout=self.exec_config.timeout,
                 restrict_to_workspace=self.restrict_to_workspace,
@@ -108,7 +113,7 @@ class SubagentManager:
             ))
             tools.register(WebSearchTool(api_key=self.brave_api_key, proxy=self.web_proxy))
             tools.register(WebFetchTool(proxy=self.web_proxy))
-            
+
             system_prompt = self._build_subagent_prompt()
             messages: list[dict[str, Any]] = [
                 {"role": "system", "content": system_prompt},
@@ -212,7 +217,6 @@ Summarize this naturally for the user. Keep it brief (1-2 sentences). Do not men
     def _build_subagent_prompt(self) -> str:
         """Build a focused system prompt for the subagent."""
         from nanobot.agent.context import ContextBuilder
-        from nanobot.agent.skills import SkillsLoader
 
         time_ctx = ContextBuilder._build_runtime_context(None, None)
         parts = [f"""# Subagent
@@ -225,7 +229,7 @@ Stay focused on the assigned task. Your final response will be reported back to 
 ## Workspace
 {self.workspace}"""]
 
-        skills_summary = SkillsLoader(self.workspace).build_skills_summary()
+        skills_summary = self.skills_loader.build_skills_summary()
         if skills_summary:
             parts.append(f"## Skills\n\nRead SKILL.md with read_file to use a skill.\n\n{skills_summary}")
 

@@ -1,5 +1,7 @@
 """Shell execution tool."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 import re
@@ -15,6 +17,7 @@ class ExecTool(Tool):
 
     def __init__(
         self,
+        skills_loader: SkillsLoader,
         timeout: int = 60,
         working_dir: str | None = None,
         deny_patterns: list[str] | None = None,
@@ -22,6 +25,7 @@ class ExecTool(Tool):
         restrict_to_workspace: bool = False,
         path_append: str = "",
     ):
+        self.skills_loader = skills_loader
         self.env_store = EnvStore()
         self.timeout = timeout
         self.working_dir = working_dir
@@ -57,21 +61,25 @@ class ExecTool(Tool):
                     "type": "string",
                     "description": "The shell command to execute"
                 },
+                "skill_name": {
+                    "type": "string",
+                    "description": "Skill name for vendor dependency resolution"
+                },
                 "working_dir": {
                     "type": "string",
                     "description": "Optional working directory for the command"
                 }
             },
-            "required": ["command"]
+            "required": ["command", "skill_name"]
         }
 
-    async def execute(self, command: str, working_dir: str | None = None, **kwargs: Any) -> str:
+    async def execute(self, command: str, skill_name: str, working_dir: str | None = None, **kwargs: Any) -> str:
         cwd = working_dir or self.working_dir or os.getcwd()
         guard_error = self._guard_command(command, cwd)
         if guard_error:
             return guard_error
 
-        env = self._build_env(cwd)
+        env = self._build_env(cwd, skill_name)
 
         try:
             process = await asyncio.create_subprocess_shell(
@@ -122,7 +130,7 @@ class ExecTool(Tool):
         except Exception as e:
             return f"Error executing command: {str(e)}"
 
-    def _build_env(self, cwd: str) -> dict[str, str]:
+    def _build_env(self, cwd: str, skill_name: str) -> dict[str, str]:
         """Build subprocess environment."""
         env = os.environ.copy()
         if self.path_append:
@@ -133,8 +141,8 @@ class ExecTool(Tool):
             env.setdefault(key, value)
 
         # vendor/ → PYTHONPATH
-        vendor = Path(cwd) / "vendor"
-        if vendor.is_dir():
+        vendor = self.skills_loader.get_vendor_path(skill_name)
+        if vendor:
             env["PYTHONPATH"] = str(vendor) + os.pathsep + env.get("PYTHONPATH", "")
 
         return env
