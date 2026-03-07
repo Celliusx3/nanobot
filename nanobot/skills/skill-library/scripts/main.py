@@ -88,9 +88,9 @@ def cmd_read(repo: str, slug: str) -> None:
 
 
 def cmd_install(repo: str, slug: str) -> None:
+    import shutil
     dest = WORKSPACE / "skills" / slug
     if dest.exists():
-        import shutil
         shutil.rmtree(dest)
     download_dir(repo, slug, dest)
     # Install pip dependencies locally into vendor/ if requirements.txt exists
