@@ -93,12 +93,23 @@ def cmd_install(repo: str, slug: str) -> None:
         import shutil
         shutil.rmtree(dest)
     download_dir(repo, slug, dest)
-    # Install pip dependencies if requirements.txt exists
+    # Install pip dependencies locally into vendor/ if requirements.txt exists
     req_file = dest / "requirements.txt"
     if req_file.exists():
         import subprocess
-        print(f"Installing pip dependencies from {req_file}...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", str(req_file)])
+        vendor_dir = dest / "vendor"
+        vendor_dir.mkdir(exist_ok=True)
+        print(f"Installing dependencies into {vendor_dir}...")
+        subprocess.check_call([
+            sys.executable, "-m", "pip", "install",
+            "--target", str(vendor_dir),
+            "-r", str(req_file),
+        ])
+        # Clean up metadata and caches to save space
+        for p in vendor_dir.glob("*.dist-info"):
+            shutil.rmtree(p)
+        for p in vendor_dir.rglob("__pycache__"):
+            shutil.rmtree(p)
     print(f"Installed '{slug}' to {dest}")
 
 

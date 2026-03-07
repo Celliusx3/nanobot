@@ -73,6 +73,11 @@ class ExecTool(Tool):
         if self.path_append:
             env["PATH"] = env.get("PATH", "") + os.pathsep + self.path_append
 
+        # Auto-add vendor/ to PYTHONPATH if it exists in the working directory
+        vendor = Path(cwd) / "vendor"
+        if vendor.is_dir():
+            env["PYTHONPATH"] = str(vendor) + os.pathsep + env.get("PYTHONPATH", "")
+
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
