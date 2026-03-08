@@ -303,6 +303,7 @@ def gateway(
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.heartbeat.service import HeartbeatService
+    from nanobot.http.service import HTTPService
     from nanobot.session.manager import SessionManager
 
     if verbose:
@@ -321,6 +322,9 @@ def gateway(
     # Create cron service first (callback set after agent creation)
     cron_store_path = get_cron_dir() / "jobs.json"
     cron = CronService(cron_store_path)
+
+    # Create shared HTTP service (always enabled — tools register routes on it)
+    http_service = HTTPService(port=port)
 
     # Create agent with cron service
     agent = AgentLoop(
@@ -341,6 +345,7 @@ def gateway(
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        http_service=http_service,
     )
 
     # Set cron callback (needs agent)
@@ -385,7 +390,7 @@ def gateway(
     cron.on_job = on_cron_job
 
     # Create channel manager
-    channels = ChannelManager(config, bus)
+    channels = ChannelManager(config, bus, http_service=http_service)
 
     def _pick_heartbeat_target() -> tuple[str, str]:
         """Pick a routable channel/chat target for heartbeat-triggered messages."""
@@ -451,6 +456,7 @@ def gateway(
 
     async def run():
         try:
+            await http_service.start()
             await cron.start()
             await heartbeat.start()
             await asyncio.gather(
@@ -465,6 +471,7 @@ def gateway(
             cron.stop()
             agent.stop()
             await channels.stop_all()
+            await http_service.stop()
 
     asyncio.run(run())
 

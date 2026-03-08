@@ -1,6 +1,7 @@
 """Encrypted environment variable store with per-skill namespacing."""
 
 import json
+import time
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -46,6 +47,24 @@ class EnvStore:
     def load_all(self, skill_name: str) -> dict[str, str]:
         """Load all decrypted vars for a specific skill."""
         return {k: self._decrypt(v) for k, v in self._load_raw().get(skill_name, {}).items()}
+
+    # -- setup tokens --
+
+    def create_setup_token(self, skill_name: str, keys: list[str], ttl: int = 600) -> str:
+        """Create a Fernet-encrypted token encoding skill_name, keys, and expiry."""
+        payload = json.dumps({"skill_name": skill_name, "keys": keys, "exp": time.time() + ttl})
+        return self._encrypt(payload)
+
+    def decode_setup_token(self, token: str) -> dict | None:
+        """Decrypt and validate a setup token. Returns payload dict or None if expired/invalid."""
+        try:
+            raw = self._decrypt(token)
+            payload = json.loads(raw)
+            if time.time() > payload["exp"]:
+                return None
+            return payload
+        except (json.JSONDecodeError, KeyError, TypeError):
+            return None
 
     # -- key management --
 

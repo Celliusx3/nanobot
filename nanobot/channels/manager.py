@@ -11,6 +11,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import Config
+from nanobot.http.service import HTTPService
 
 
 class ChannelManager:
@@ -23,9 +24,10 @@ class ChannelManager:
     - Route outbound messages
     """
 
-    def __init__(self, config: Config, bus: MessageBus):
+    def __init__(self, config: Config, bus: MessageBus, http_service: HTTPService):
         self.config = config
         self.bus = bus
+        self._http_service = http_service
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
 
@@ -154,7 +156,8 @@ class ChannelManager:
         if self.config.channels.http.enabled:
             from nanobot.channels.http import HTTPChannel
             self.channels["http"] = HTTPChannel(
-                self.config.channels.http, self.bus
+                self.config.channels.http, self.bus,
+                http_service=self._http_service,
             )
             logger.info("HTTP channel enabled")
 

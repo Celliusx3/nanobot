@@ -1,5 +1,7 @@
 """HTTP channel — REST API for sending messages to nanobot."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import uuid
@@ -10,6 +12,7 @@ from loguru import logger
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
+from nanobot.http.service import HTTPService
 
 _REQUEST_TIMEOUT = 300  # seconds
 
@@ -19,24 +22,18 @@ class HTTPChannel(BaseChannel):
 
     name = "http"
 
-    def __init__(self, config, bus: MessageBus):
+    def __init__(self, config, bus: MessageBus, http_service: HTTPService):
         super().__init__(config, bus)
         self._pending: dict[str, asyncio.Future] = {}
-        self._runner: web.AppRunner | None = None
+
+        # Register chat routes on shared HTTP service
+        http_service.add_post("/v1/chat", self._handle_chat)
+        http_service.add_get("/health", self._handle_health)
+        logger.info("HTTP chat routes registered on port {}", http_service.port)
 
     async def start(self) -> None:
         self._running = True
-        app = web.Application()
-        app.router.add_post("/v1/chat", self._handle_chat)
-        app.router.add_get("/health", self._handle_health)
-
-        self._runner = web.AppRunner(app)
-        await self._runner.setup()
-        site = web.TCPSite(self._runner, "0.0.0.0", self.config.port)
-        await site.start()
-        logger.info("HTTP API listening on http://0.0.0.0:{}/v1/chat", self.config.port)
-
-        # Keep running until stopped
+        # Server is managed by HTTPService — just keep the channel alive
         await asyncio.Event().wait()
 
     async def stop(self) -> None:
@@ -46,8 +43,6 @@ class HTTPChannel(BaseChannel):
             if not future.done():
                 future.cancel()
         self._pending.clear()
-        if self._runner:
-            await self._runner.cleanup()
 
     async def send(self, msg: OutboundMessage) -> None:
         """Resolve the pending future for this chat_id (final messages only)."""
