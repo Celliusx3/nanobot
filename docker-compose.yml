@@ -13,6 +13,8 @@ services:
     restart: unless-stopped
     ports:
       - 18790:18790
+    environment:
+      - BASE_URL=${BASE_URL:-}
     deploy:
       resources:
         limits:
