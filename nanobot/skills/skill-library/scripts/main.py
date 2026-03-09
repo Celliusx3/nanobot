@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Skill library — browse, install, and publish skills from a GitHub repo.
 
+The target repo is read from the REPOSITORY_URL environment variable.
+
 Usage:
-    main.py list    <owner/repo>
-    main.py read    <owner/repo> <slug>
-    main.py install <owner/repo> <slug>
-    main.py push    <owner/repo> <slug>
-    main.py delete  <owner/repo> <slug>
+    main.py list
+    main.py read    <slug>
+    main.py install <slug>
+    main.py push    <slug>
+    main.py delete  <slug>
 """
 
 import base64
@@ -227,33 +229,40 @@ def cmd_delete(repo: str, slug: str) -> None:
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         print(__doc__.strip())
         sys.exit(1)
 
-    cmd, repo = sys.argv[1], sys.argv[2]
-    slug = sys.argv[3] if len(sys.argv) > 3 else ""
+    raw_url = os.environ.get("REPOSITORY_URL", "")
+    if not raw_url:
+        print("Error: REPOSITORY_URL environment variable is not set.")
+        sys.exit(1)
+    # Extract owner/repo from URL (e.g. https://github.com/owner/repo -> owner/repo)
+    repo = raw_url.rstrip("/").split("github.com/")[-1]
+
+    cmd = sys.argv[1]
+    slug = sys.argv[2] if len(sys.argv) > 2 else ""
 
     if cmd == "list":
         cmd_list(repo)
     elif cmd == "read":
         if not slug:
-            print("Usage: main.py read <owner/repo> <slug>")
+            print("Usage: main.py read <slug>")
             sys.exit(1)
         cmd_read(repo, slug)
     elif cmd == "install":
         if not slug:
-            print("Usage: main.py install <owner/repo> <slug>")
+            print("Usage: main.py install <slug>")
             sys.exit(1)
         cmd_install(repo, slug)
     elif cmd == "push":
         if not slug:
-            print("Usage: main.py push <owner/repo> <slug>")
+            print("Usage: main.py push <slug>")
             sys.exit(1)
         cmd_push(repo, slug)
     elif cmd == "delete":
         if not slug:
-            print("Usage: main.py delete <owner/repo> <slug>")
+            print("Usage: main.py delete <slug>")
             sys.exit(1)
         cmd_delete(repo, slug)
     else:

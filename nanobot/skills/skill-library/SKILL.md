@@ -1,12 +1,12 @@
 ---
 name: skill-library
 description: Browse, install, and publish skills from a personal GitHub skill library.
-metadata: {"nanobot":{"emoji":"📚","requires":{"env":["GH_TOKEN"]}}}
+metadata: {"nanobot":{"emoji":"📚","requires":{"env":["GH_TOKEN","REPOSITORY_URL"]}}}
 ---
 
 # Skill Library
 
-Personal skill library hosted on GitHub. Search by browsing, install individually, publish new skills.
+Personal skill library hosted on GitHub. The target repo is configured via the `REPOSITORY_URL` environment variable (e.g. `https://github.com/celliusx3/nanobot-skills`).
 
 ## When to use
 
@@ -22,19 +22,19 @@ Use this skill when the user asks any of:
 ## Search
 
 ```bash
-python3 scripts/main.py list <owner/repo>
+python3 scripts/main.py list
 ```
 
 To read a skill's description before installing:
 
 ```bash
-python3 scripts/main.py read <owner/repo> <slug>
+python3 scripts/main.py read <slug>
 ```
 
 ## Install
 
 ```bash
-python3 scripts/main.py install <owner/repo> <slug>
+python3 scripts/main.py install <slug>
 ```
 
 ## Publish
@@ -42,7 +42,7 @@ python3 scripts/main.py install <owner/repo> <slug>
 Push a locally-created skill to the remote library (single commit):
 
 ```bash
-python3 scripts/main.py push <owner/repo> <slug>
+python3 scripts/main.py push <slug>
 ```
 
 This uploads all files from `~/.nanobot/workspace/skills/<slug>/` to the repo.
@@ -69,13 +69,13 @@ rm -rf ~/.nanobot/workspace/skills/<slug>
 Remove from remote library:
 
 ```bash
-python3 scripts/main.py delete <owner/repo> <slug>
+python3 scripts/main.py delete <slug>
 ```
 
 ## Notes
 
 - No extra tools needed — uses Python stdlib only (urllib).
 - Downloads and uploads only the specific skill, not the entire repo.
-- For private repos, set `GH_TOKEN` environment variable.
+- Requires `GH_TOKEN` and `REPOSITORY_URL` environment variables.
 - No restart needed — installed skills are picked up on the next message.
 - If a skill is not found here, fall back to ClawHub: `npx --yes clawhub@latest search "<query>"`.
