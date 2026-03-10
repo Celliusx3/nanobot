@@ -240,6 +240,7 @@ class AgentDefaults(Base):
     temperature: float = 0.1
     max_tool_iterations: int = 40
     memory_window: int = 100
+    max_history_tokens: int = 8000  # Token budget for conversation history sent to LLM
     reasoning_effort: str | None = None  # low / medium / high — enables LLM thinking mode
 
 

@@ -57,6 +57,7 @@ class AgentLoop:
         temperature: float = 0.1,
         max_tokens: int = 4096,
         memory_window: int = 100,
+        max_history_tokens: int = 8000,
         reasoning_effort: str | None = None,
         exec_config: ExecToolConfig | None = None,
         cron_service: CronService | None = None,
@@ -77,6 +78,7 @@ class AgentLoop:
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.memory_window = memory_window
+        self.max_history_tokens = max_history_tokens
         self.reasoning_effort = reasoning_effort
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
@@ -198,6 +200,14 @@ class AgentLoop:
                 max_tokens=self.max_tokens,
                 reasoning_effort=self.reasoning_effort,
             )
+
+            if response.usage:
+                logger.info(
+                    "Token usage — prompt: {}, completion: {}, total: {}",
+                    response.usage.get("prompt_tokens", 0),
+                    response.usage.get("completion_tokens", 0),
+                    response.usage.get("total_tokens", 0),
+                )
 
             if response.has_tool_calls:
                 if on_progress:
@@ -341,7 +351,7 @@ class AgentLoop:
             key = f"{channel}:{chat_id}"
             session = self.sessions.get_or_create(key)
             self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
-            history = session.get_history(max_messages=self.memory_window)
+            history = session.get_history(max_messages=self.memory_window, max_tokens=self.max_history_tokens)
             messages = self.context.build_messages(
                 history=history,
                 current_message=msg.content, channel=channel, chat_id=chat_id,
@@ -415,7 +425,7 @@ class AgentLoop:
             if isinstance(message_tool, MessageTool):
                 message_tool.start_turn()
 
-        history = session.get_history(max_messages=self.memory_window)
+        history = session.get_history(max_messages=self.memory_window, max_tokens=self.max_history_tokens)
         initial_messages = self.context.build_messages(
             history=history,
             current_message=msg.content,

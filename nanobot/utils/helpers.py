@@ -36,6 +36,14 @@ def safe_filename(name: str) -> str:
     return _UNSAFE_CHARS.sub("_", name).strip()
 
 
+def estimate_tokens(text: str) -> int:
+    """Estimate token count using chars/4 heuristic with 1.2x safety margin.
+
+    Same approach as OpenClaw (src/agents/compaction.ts SAFETY_MARGIN).
+    """
+    return int(len(text) / 4 * 1.2)
+
+
 def split_message(content: str, max_len: int = 2000) -> list[str]:
     """
     Split content into chunks within max_len, preferring line breaks.

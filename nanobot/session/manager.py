@@ -43,8 +43,16 @@ class Session:
         self.messages.append(msg)
         self.updated_at = datetime.now()
 
-    def get_history(self, max_messages: int = 500) -> list[dict[str, Any]]:
-        """Return unconsolidated messages for LLM input, aligned to a user turn."""
+    def get_history(self, max_messages: int, max_tokens: int) -> list[dict[str, Any]]:
+        """Return unconsolidated messages for LLM input, aligned to a user turn.
+
+        Args:
+            max_messages: Maximum number of messages to return.
+            max_tokens: Token budget — keeps only the most recent messages
+                that fit within this budget, aligned to user turn boundaries.
+        """
+        from nanobot.utils.helpers import estimate_tokens
+
         unconsolidated = self.messages[self.last_consolidated:]
         sliced = unconsolidated[-max_messages:]
 
@@ -53,6 +61,27 @@ class Session:
             if m.get("role") == "user":
                 sliced = sliced[i:]
                 break
+
+        # Apply token budget: walk backwards keeping messages until budget exhausted,
+        # then align the cut point to a user turn boundary.
+        if sliced:
+            total = 0
+            cut = len(sliced)  # Default: keep everything
+            for i in range(len(sliced) - 1, -1, -1):
+                content = sliced[i].get("content", "")
+                msg_text = content if isinstance(content, str) else str(content)
+                total += estimate_tokens(msg_text)
+                if total > max_tokens:
+                    cut = i + 1  # This message pushed us over; start from next
+                    break
+            else:
+                cut = 0  # Everything fits
+
+            # Align cut to the next user message to avoid orphaned tool results
+            while cut < len(sliced) and sliced[cut].get("role") != "user":
+                cut += 1
+
+            sliced = sliced[cut:]
 
         out: list[dict[str, Any]] = []
         for m in sliced:
