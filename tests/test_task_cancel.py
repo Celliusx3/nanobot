@@ -1,4 +1,4 @@
-"""Tests for /stop task cancellation."""
+"""Tests for /stop task cancellation and delegate tool."""
 
 from __future__ import annotations
 
@@ -21,8 +21,7 @@ def _make_loop():
 
     with patch("nanobot.agent.loop.ContextBuilder"), \
          patch("nanobot.agent.loop.SessionManager"), \
-         patch("nanobot.agent.loop.SubagentManager") as MockSubMgr:
-        MockSubMgr.return_value.cancel_by_session = AsyncMock(return_value=0)
+         patch("nanobot.agent.loop.SubagentManager"):
         loop = AgentLoop(bus=bus, provider=provider, workspace=workspace)
     return loop, bus
 
@@ -126,42 +125,61 @@ class TestDispatch:
         assert order == ["start-a", "end-a", "start-b", "end-b"]
 
 
-class TestSubagentCancellation:
+class TestDelegate:
     @pytest.mark.asyncio
-    async def test_cancel_by_session(self):
+    async def test_delegate_returns_result(self, tmp_path):
+        """Sub-agent returns text directly to coordinator."""
         from nanobot.agent.subagent import SubagentManager
-        from nanobot.bus.queue import MessageBus
 
-        bus = MessageBus()
         provider = MagicMock()
         provider.get_default_model.return_value = "test-model"
-        mgr = SubagentManager(provider=provider, workspace=MagicMock(), bus=bus)
 
-        cancelled = asyncio.Event()
+        # Mock LLM to return text response (no tool calls)
+        response = MagicMock()
+        response.has_tool_calls = False
+        response.content = "The answer is 42."
+        provider.chat_with_retry = AsyncMock(return_value=response)
 
-        async def slow():
-            try:
-                await asyncio.sleep(60)
-            except asyncio.CancelledError:
-                cancelled.set()
-                raise
+        mgr = SubagentManager(provider=provider, workspace=tmp_path)
 
-        task = asyncio.create_task(slow())
-        await asyncio.sleep(0)
-        mgr._running_tasks["sub-1"] = task
-        mgr._session_tasks["test:c1"] = {"sub-1"}
-
-        count = await mgr.cancel_by_session("test:c1")
-        assert count == 1
-        assert cancelled.is_set()
+        result = await mgr.delegate(task="What is the answer?", label="test")
+        assert result == "The answer is 42."
 
     @pytest.mark.asyncio
-    async def test_cancel_by_session_no_tasks(self):
+    async def test_delegate_max_iterations(self, tmp_path):
+        """Sub-agent returns fallback after hitting max iterations."""
         from nanobot.agent.subagent import SubagentManager
-        from nanobot.bus.queue import MessageBus
 
-        bus = MessageBus()
         provider = MagicMock()
         provider.get_default_model.return_value = "test-model"
-        mgr = SubagentManager(provider=provider, workspace=MagicMock(), bus=bus)
-        assert await mgr.cancel_by_session("nonexistent") == 0
+
+        # Always return tool calls (never returns text)
+        tool_call = MagicMock()
+        tool_call.id = "tc1"
+        tool_call.name = "exec"
+        tool_call.arguments = {"command": "echo hi"}
+
+        response = MagicMock()
+        response.has_tool_calls = True
+        response.tool_calls = [tool_call]
+        response.content = ""
+        provider.chat_with_retry = AsyncMock(return_value=response)
+
+        mgr = SubagentManager(provider=provider, workspace=tmp_path)
+        # Patch the internally-built tools so exec resolves
+        mock_tools = MagicMock()
+        mock_tools.get_definitions.return_value = [
+            {"type": "function", "function": {"name": "exec"}}
+        ]
+        mock_tools.execute = AsyncMock(return_value="hi")
+
+        with patch("nanobot.agent.subagent.ToolRegistry", return_value=mock_tools), \
+             patch("nanobot.agent.subagent.ReadFileTool"), \
+             patch("nanobot.agent.subagent.WriteFileTool"), \
+             patch("nanobot.agent.subagent.EditFileTool"), \
+             patch("nanobot.agent.subagent.ListDirTool"), \
+             patch("nanobot.agent.subagent.ExecTool"):
+            result = await mgr.delegate(task="loop forever")
+
+        assert "no final response" in result.lower()
+        assert provider.chat_with_retry.call_count == 15
