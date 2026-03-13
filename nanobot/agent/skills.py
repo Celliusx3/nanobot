@@ -5,10 +5,12 @@ import re
 import shutil
 from pathlib import Path
 
+from loguru import logger
+
 from nanobot.config.env import EnvStore
 
-# Default builtin skills directory (relative to this file)
-BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
+# Package-bundled skills directory (relative to this file)
+_BUILTIN_SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
 
 class SkillsLoader:
@@ -17,13 +19,41 @@ class SkillsLoader:
 
     Skills are markdown files (SKILL.md) that teach the agent how to use
     specific tools or perform certain tasks.
+
+    At init, builtin skills are synced into the workspace so the agent
+    only ever reads from workspace/skills/.
     """
 
-    def __init__(self, workspace: Path, builtin_skills_dir: Path | None = None):
+    def __init__(self, workspace: Path):
         self.workspace = workspace
         self.workspace_skills = workspace / "skills"
-        self.builtin_skills = builtin_skills_dir or BUILTIN_SKILLS_DIR
         self.env_store = EnvStore()
+        self._sync_builtins()
+
+    def _sync_builtins(self) -> list[str]:
+        """Sync builtin skills into workspace/skills/.
+
+        Always overwrites workspace skills that match a builtin name
+        (same behavior as skill-library install). User-created skills
+        with unique names are never touched.
+
+        Returns list of skill names that were synced.
+        """
+        if not _BUILTIN_SKILLS_DIR.is_dir():
+            return []
+        self.workspace_skills.mkdir(parents=True, exist_ok=True)
+        synced = []
+        for src in _BUILTIN_SKILLS_DIR.iterdir():
+            if not src.is_dir():
+                continue
+            dest = self.workspace_skills / src.name
+            if dest.exists():
+                shutil.rmtree(dest)
+            shutil.copytree(src, dest)
+            synced.append(src.name)
+        if synced:
+            logger.info("Synced builtin skills: {}", ", ".join(synced))
+        return synced
 
     def list_skills(self, filter_unavailable: bool = True) -> list[dict[str, str]]:
         """
@@ -37,7 +67,6 @@ class SkillsLoader:
         """
         skills = []
 
-        # Workspace skills (highest priority)
         if self.workspace_skills.exists():
             for skill_dir in self.workspace_skills.iterdir():
                 if skill_dir.is_dir():
@@ -45,15 +74,6 @@ class SkillsLoader:
                     if skill_file.exists():
                         skills.append({"name": skill_dir.name, "path": str(skill_file), "source": "workspace"})
 
-        # Built-in skills
-        if self.builtin_skills and self.builtin_skills.exists():
-            for skill_dir in self.builtin_skills.iterdir():
-                if skill_dir.is_dir():
-                    skill_file = skill_dir / "SKILL.md"
-                    if skill_file.exists() and not any(s["name"] == skill_dir.name for s in skills):
-                        skills.append({"name": skill_dir.name, "path": str(skill_file), "source": "builtin"})
-
-        # Filter by requirements
         if filter_unavailable:
             return [s for s in skills if self._check_requirements(s["name"], self._get_skill_meta(s["name"]))]
         return skills
@@ -68,17 +88,9 @@ class SkillsLoader:
         Returns:
             Skill content or None if not found.
         """
-        # Check workspace first
-        workspace_skill = self.workspace_skills / name / "SKILL.md"
-        if workspace_skill.exists():
-            return workspace_skill.read_text(encoding="utf-8")
-
-        # Check built-in
-        if self.builtin_skills:
-            builtin_skill = self.builtin_skills / name / "SKILL.md"
-            if builtin_skill.exists():
-                return builtin_skill.read_text(encoding="utf-8")
-
+        skill_file = self.workspace_skills / name / "SKILL.md"
+        if skill_file.exists():
+            return skill_file.read_text(encoding="utf-8")
         return None
 
     def load_skills_for_context(self, skill_names: list[str]) -> str:
