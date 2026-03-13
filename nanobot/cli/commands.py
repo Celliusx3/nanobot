@@ -352,10 +352,11 @@ def gateway(
         """Execute a cron job through the agent."""
         from nanobot.agent.tools.cron import CronTool
         from nanobot.agent.tools.message import MessageTool
-        reminder_note = (
-            "[Scheduled Task] Timer finished.\n\n"
-            f"Task '{job.name}' has been triggered.\n"
-            f"Scheduled instruction: {job.payload.message}"
+        from nanobot.services.template import TemplateService
+        reminder_note = TemplateService().render(
+            "prompts/cron_notification.j2",
+            job_name=job.name,
+            job_message=job.payload.message,
         )
 
         # Prevent the agent from scheduling new cron jobs during execution

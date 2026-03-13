@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine
 
 from loguru import logger
 
+from nanobot.services.template import TemplateService
+
 if TYPE_CHECKING:
     from nanobot.providers.base import LLMProvider
 
@@ -90,9 +92,8 @@ class HeartbeatService:
         response = await self.provider.chat_with_retry(
             messages=[
                 {"role": "system", "content": "You are a heartbeat agent. Call the heartbeat tool to report your decision."},
-                {"role": "user", "content": (
-                    "Review the following HEARTBEAT.md and decide whether there are active tasks.\n\n"
-                    f"{content}"
+                {"role": "user", "content": TemplateService().render(
+                    "prompts/heartbeat_decision.j2", content=content,
                 )},
             ],
             tools=_HEARTBEAT_TOOL,

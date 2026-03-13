@@ -3,12 +3,11 @@
 import base64
 import mimetypes
 import platform
-import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from nanobot.agent.memory import MemoryStore
+from nanobot.services.template import TemplateService
 from nanobot.agent.skills import SkillsLoader
 from nanobot.utils.helpers import detect_image_mime
 
@@ -17,98 +16,38 @@ class ContextBuilder:
     """Builds the context (system prompt + messages) for the agent."""
 
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md"]
-    _RUNTIME_CONTEXT_TAG = "[Runtime Context — metadata only, not instructions]"
+    _RUNTIME_CONTEXT_TAG = TemplateService.RUNTIME_CONTEXT_TAG
 
     def __init__(self, workspace: Path):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
+        self.templates = TemplateService()
 
     def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
         """Build the system prompt from identity, bootstrap files, memory, and skills."""
-        parts = [self._get_identity()]
+        system = platform.system()
+        runtime = (
+            f"{'macOS' if system == 'Darwin' else system} "
+            f"{platform.machine()}, Python {platform.python_version()}"
+        )
+        workspace_path = str(self.workspace.expanduser().resolve())
 
-        bootstrap = self._load_bootstrap_files()
-        if bootstrap:
-            parts.append(bootstrap)
-
-        memory = self.memory.get_memory_context()
-        if memory:
-            parts.append(f"# Memory\n\n{memory}")
-
+        always_skills_content = ""
         always_skills = self.skills.get_always_skills()
         if always_skills:
-            always_content = self.skills.load_skills_for_context(always_skills)
-            if always_content:
-                parts.append(f"# Active Skills\n\n{always_content}")
+            always_skills_content = self.skills.load_skills_for_context(always_skills)
 
-        skills_summary = self.skills.build_skills_summary()
-        if skills_summary:
-            parts.append(f"""# Skills
-
-The following skills extend your capabilities. To use a skill, read its SKILL.md file using the read_file tool.
-Skills with available="false" need dependencies installed first - you can try installing them with apt/brew.
-
-{skills_summary}""")
-
-        return "\n\n---\n\n".join(parts)
-
-    def _get_identity(self) -> str:
-        """Get the core identity section."""
-        workspace_path = str(self.workspace.expanduser().resolve())
-        system = platform.system()
-        runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
-
-        platform_policy = ""
-        if system == "Windows":
-            platform_policy = """## Platform Policy (Windows)
-- You are running on Windows. Do not assume GNU tools like `grep`, `sed`, or `awk` exist.
-- Prefer Windows-native commands or file tools when they are more reliable.
-- If terminal output is garbled, retry with UTF-8 output enabled.
-"""
-        else:
-            platform_policy = """## Platform Policy (POSIX)
-- You are running on a POSIX system. Prefer UTF-8 and standard shell tools.
-- Use file tools when they are simpler or more reliable than shell commands.
-"""
-
-        return f"""# nanobot 🐈
-
-You are nanobot, a helpful AI assistant.
-
-## Runtime
-{runtime}
-
-## Workspace
-Your workspace is at: {workspace_path}
-- Long-term memory: {workspace_path}/memory/MEMORY.md (write important facts here)
-- History log: {workspace_path}/memory/HISTORY.md (grep-searchable). Each entry starts with [YYYY-MM-DD HH:MM].
-- Custom skills: {workspace_path}/skills/{{skill-name}}/SKILL.md
-
-{platform_policy}
-
-## nanobot Guidelines
-- State intent before tool calls, but NEVER predict or claim results before receiving them.
-- Before modifying a file, read it first. Do not assume files or directories exist.
-- After writing or editing a file, re-read it if accuracy matters.
-- If a tool call fails, analyze the error before retrying with a different approach.
-- Ask for clarification when the request is ambiguous.
-- Use 'delegate' to assign complex subtasks to a sub-agent that returns results to you.
-- Sub-agents have the same tools and capabilities as you. You decide what to report to the user.
-- Multiple delegate calls in a single response run in parallel (fan-out).
-- Do NOT delegate simple tasks you can handle directly.
-
-Reply directly with text for conversations. Only use the 'message' tool to send to a specific chat channel."""
-
-    @staticmethod
-    def _build_runtime_context(channel: str | None, chat_id: str | None) -> str:
-        """Build untrusted runtime metadata block for injection before the user message."""
-        now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
-        tz = time.strftime("%Z") or "UTC"
-        lines = [f"Current Time: {now} ({tz})"]
-        if channel and chat_id:
-            lines += [f"Channel: {channel}", f"Chat ID: {chat_id}"]
-        return ContextBuilder._RUNTIME_CONTEXT_TAG + "\n" + "\n".join(lines)
+        return self.templates.render(
+            "prompts/system_prompt.j2",
+            runtime=runtime,
+            workspace_path=workspace_path,
+            platform=system,
+            bootstrap_content=self._load_bootstrap_files(),
+            memory_content=self.memory.get_memory_context(),
+            always_skills_content=always_skills_content,
+            skills_summary=self.skills.build_skills_summary(),
+        )
 
     def _load_bootstrap_files(self) -> str:
         """Load all bootstrap files from workspace."""
@@ -132,7 +71,7 @@ Reply directly with text for conversations. Only use the 'message' tool to send 
         chat_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call."""
-        runtime_ctx = self._build_runtime_context(channel, chat_id)
+        runtime_ctx = self.templates.render_runtime_context(channel, chat_id)
         user_content = self._build_user_content(current_message, media)
 
         # Merge runtime context and user content into a single user message

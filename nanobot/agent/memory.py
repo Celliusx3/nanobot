@@ -101,14 +101,14 @@ class MemoryStore:
             tools = f" [tools: {', '.join(m['tools_used'])}]" if m.get("tools_used") else ""
             lines.append(f"[{m.get('timestamp', '?')[:16]}] {m['role'].upper()}{tools}: {m['content']}")
 
+        from nanobot.services.template import TemplateService
+
         current_memory = self.read_long_term()
-        prompt = f"""Process this conversation and call the save_memory tool with your consolidation.
-
-## Current Long-term Memory
-{current_memory or "(empty)"}
-
-## Conversation to Process
-{chr(10).join(lines)}"""
+        prompt = TemplateService().render(
+            "prompts/memory_consolidation.j2",
+            current_memory=current_memory,
+            conversation="\n".join(lines),
+        )
 
         try:
             response = await provider.chat_with_retry(

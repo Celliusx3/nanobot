@@ -131,21 +131,12 @@ class SubagentManager:
 
     def _build_subagent_prompt(self) -> str:
         """Build a focused system prompt for the subagent."""
-        from nanobot.agent.context import ContextBuilder
+        from nanobot.services.template import TemplateService
 
-        time_ctx = ContextBuilder._build_runtime_context(None, None)
-        parts = [f"""# Subagent
-
-{time_ctx}
-
-You are a subagent spawned by the main agent to complete a specific task.
-Stay focused on the assigned task. Your final response will be reported back to the main agent.
-
-## Workspace
-{self.workspace}"""]
-
-        skills_summary = self.skills_loader.build_skills_summary()
-        if skills_summary:
-            parts.append(f"## Skills\n\nRead SKILL.md with read_file to use a skill.\n\n{skills_summary}")
-
-        return "\n\n".join(parts)
+        templates = TemplateService()
+        return templates.render(
+            "prompts/subagent.j2",
+            runtime_context=templates.render_runtime_context(),
+            workspace=self.workspace,
+            skills_summary=self.skills_loader.build_skills_summary(),
+        )

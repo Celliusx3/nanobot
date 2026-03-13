@@ -1,0 +1,34 @@
+{% include "prompts/identity.j2" %}
+{% if bootstrap_content %}
+
+---
+
+{{ bootstrap_content }}
+{% endif %}
+{% if memory_content %}
+
+---
+
+# Memory
+
+{{ memory_content }}
+{% endif %}
+{% if always_skills_content %}
+
+---
+
+# Active Skills
+
+{{ always_skills_content }}
+{% endif %}
+{% if skills_summary %}
+
+---
+
+# Skills
+
+The following skills extend your capabilities. To use a skill, read its SKILL.md file using the read_file tool.
+Skills with available="false" need dependencies installed first - you can try installing them with apt/brew.
+
+{{ skills_summary }}
+{% endif %}
