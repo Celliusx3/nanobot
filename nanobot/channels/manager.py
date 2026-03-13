@@ -11,7 +11,7 @@ from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import Config
-from nanobot.http.service import HTTPService
+from nanobot.services.http.service import HTTPService
 
 
 class ChannelManager:

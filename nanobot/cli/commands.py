@@ -300,11 +300,11 @@ def gateway(
     from nanobot.bus.queue import MessageBus
     from nanobot.channels.manager import ChannelManager
     from nanobot.config.paths import get_cron_dir
-    from nanobot.cron.service import CronService
-    from nanobot.cron.types import CronJob
-    from nanobot.heartbeat.service import HeartbeatService
-    from nanobot.http.service import HTTPService
-    from nanobot.session.manager import SessionManager
+    from nanobot.services.cron.service import CronService
+    from nanobot.services.cron.types import CronJob
+    from nanobot.services.heartbeat.service import HeartbeatService
+    from nanobot.services.http.service import HTTPService
+    from nanobot.services.session.manager import SessionManager
 
     if verbose:
         import logging
@@ -498,7 +498,7 @@ def agent(
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
     from nanobot.config.paths import get_cron_dir
-    from nanobot.cron.service import CronService
+    from nanobot.services.cron.service import CronService
 
     config = _load_runtime_config(config, workspace)
     sync_workspace_templates(config.workspace_path)

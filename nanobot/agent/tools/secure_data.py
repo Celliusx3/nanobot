@@ -15,7 +15,7 @@ from loguru import logger
 
 from nanobot.agent.tools.base import Tool
 from nanobot.config.env import EnvStore
-from nanobot.http.service import HTTPService
+from nanobot.services.http.service import HTTPService
 
 
 # ── HTML templates (loaded from nanobot/templates/html/) ─────────

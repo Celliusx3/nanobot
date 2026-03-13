@@ -12,7 +12,7 @@ from loguru import logger
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
-from nanobot.http.service import HTTPService
+from nanobot.services.http.service import HTTPService
 
 _REQUEST_TIMEOUT = 300  # seconds
 

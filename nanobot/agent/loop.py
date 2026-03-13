@@ -25,12 +25,12 @@ from nanobot.agent.tools.delegate import DelegateTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.providers.base import LLMProvider
-from nanobot.session.manager import Session, SessionManager
+from nanobot.services.session.manager import Session, SessionManager
 
 if TYPE_CHECKING:
     from nanobot.config.schema import ChannelsConfig, ExecToolConfig
-    from nanobot.cron.service import CronService
-    from nanobot.http.service import HTTPService
+    from nanobot.services.cron.service import CronService
+    from nanobot.services.http.service import HTTPService
 
 
 class AgentLoop:
