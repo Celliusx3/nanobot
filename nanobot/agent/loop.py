@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 from loguru import logger
 
+from nanobot.services.approval import ApprovalService
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.memory import MemoryStore
 from nanobot.agent.subagent import SubagentManager
@@ -21,6 +22,7 @@ from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTo
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
 from nanobot.agent.tools.shell import ExecTool
+from nanobot.agent.tools.approval import ApproveToolTool, ListApprovalsTool, RevokeApprovalTool
 from nanobot.agent.tools.delegate import DelegateTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
@@ -52,6 +54,7 @@ class AgentLoop:
         bus: MessageBus,
         provider: LLMProvider,
         workspace: Path,
+        approval_service: ApprovalService,
         model: str | None = None,
         max_iterations: int = 40,
         temperature: float = 0.1,
@@ -83,6 +86,7 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self._approval_service = approval_service
 
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -129,6 +133,9 @@ class AgentLoop:
 
         if self.http_service:
             self.tools.register(SecureDataTool(http_service=self.http_service))
+
+        for cls in (ApproveToolTool, ListApprovalsTool, RevokeApprovalTool):
+            self.tools.register(cls(store=self._approval_service))
 
     async def _connect_mcp(self) -> None:
         """Connect to configured MCP servers (one-time, lazy)."""
@@ -257,7 +264,12 @@ class AgentLoop:
                         tools_used.append(tool_call.name)
                         args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                         logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
-                        result = await self.tools.execute(tool_call.name, tool_call.arguments)
+
+                        # Approval gate: block unapproved tools
+                        if self._approval_service.needs_approval(tool_call.name, tool_call.arguments or {}):
+                            result = "Tool execution denied: approval required."
+                        else:
+                            result = await self.tools.execute(tool_call.name, tool_call.arguments)
                         messages = self.context.add_tool_result(
                             messages, tool_call.id, tool_call.name, result
                         )

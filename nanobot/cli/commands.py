@@ -31,6 +31,7 @@ from rich.text import Text
 from nanobot import __logo__, __version__
 from nanobot.config.paths import get_workspace_path
 from nanobot.config.schema import Config
+from nanobot.services.approval import ApprovalService
 from nanobot.utils.helpers import sync_workspace_templates
 
 app = typer.Typer(
@@ -345,6 +346,7 @@ def gateway(
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
         http_service=http_service,
+        approval_service=ApprovalService(config.workspace_path, config.tools.approval_required),
     )
 
     # Set cron callback (needs agent)
@@ -531,6 +533,7 @@ def agent(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        approval_service=ApprovalService(config.workspace_path, config.tools.approval_required),
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on
